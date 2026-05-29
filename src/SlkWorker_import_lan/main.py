@@ -19,8 +19,7 @@ DB_USER             = os.environ['DB_USER']
 DB_PASSWORD         = os.environ['DB_PASSWORD']
 DB_NAME             = os.environ['DB_NAME']
 GOOGLE_SECRET_ARN   = os.environ['GOOGLE_SECRET_ARN']
-DRIVE_ROOT_FOLDER_ID = '1qe_PJlaCmXZuEz8yvQdxq8gZhBrJXv7W'
-
+DRIVE_ROOT_FOLDER_ID = # Id do drive do google
 TODOS_EM_ABERTO = 3
 
 # --- Clientes AWS ---

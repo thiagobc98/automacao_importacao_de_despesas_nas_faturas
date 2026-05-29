@@ -21,7 +21,7 @@ DB_PASSWORD         = os.environ['DB_PASSWORD']
 DB_NAME             = os.environ['DB_NAME']
 GOOGLE_SECRET_ARN   = os.environ['GOOGLE_SECRET_ARN']
 WORKER_QUEUE_URL    = os.environ['WORKER_QUEUE_URL']
-DRIVE_ROOT_FOLDER_ID = '1qe_PJlaCmXZuEz8yvQdxq8gZhBrJXv7W'
+DRIVE_ROOT_FOLDER_ID = # id do drive do google
 
 # --- Clientes AWS ---
 sqs = boto3.client('sqs')
