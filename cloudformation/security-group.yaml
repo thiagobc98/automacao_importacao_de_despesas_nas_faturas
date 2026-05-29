@@ -1,0 +1,12 @@
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: lambda-${self:service}-${self:provider.stage}-sg
+      GroupDescription: SG for ${self:service}-${self:provider.stage} Lambda
+      VpcId: ${self:custom.envParams.vpcId}
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0

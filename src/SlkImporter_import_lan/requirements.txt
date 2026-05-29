@@ -1,0 +1,5 @@
+pymysql==1.1.1
+requests
+gspread
+google-api-python-client
+google-auth

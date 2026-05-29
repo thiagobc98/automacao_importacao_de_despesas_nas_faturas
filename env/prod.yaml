@@ -1,0 +1,14 @@
+prune:
+  automatic: true
+  number: 1
+pythonRequirements:
+  layer: true
+  name: ${self:service}-layer
+  fileName: src/requirements.txt
+secretsManager: #url do secret manager
+vpcId: #id da vpc
+vpcConfig:
+  securityGroupIds:
+    - Ref: SecurityGroup
+  subnetIds:
+    - #subnets

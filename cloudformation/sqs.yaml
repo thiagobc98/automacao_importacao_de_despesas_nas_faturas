@@ -1,0 +1,61 @@
+Resources:
+  SqsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: "KMS Key para criptografia das filas SQS FIFO"
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: kms:*
+            Resource: '*'
+
+  WorkerDlqFifo:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-dlq.fifo
+      FifoQueue: true
+      KmsMasterKeyId: !GetAtt SqsKmsKey.Arn
+      MessageRetentionPeriod: 1209600 # 14 dias
+
+  MainFifoQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-main.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600
+      VisibilityTimeout: 360 # 6 minutos (maior que o timeout do Importer)
+      KmsMasterKeyId: !GetAtt SqsKmsKey.Arn
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt WorkerDlqFifo.Arn
+        maxReceiveCount: 3
+
+  WorkerJobDlqFifo:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-worker-dlq.fifo
+      FifoQueue: true
+      KmsMasterKeyId: !GetAtt SqsKmsKey.Arn
+      MessageRetentionPeriod: 1209600 # 14 dias
+
+  WorkerFifoQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-${self:provider.stage}-worker.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600
+      VisibilityTimeout: 360 # 6 minutos (maior que o timeout do Worker)
+      KmsMasterKeyId: !GetAtt SqsKmsKey.Arn
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt WorkerJobDlqFifo.Arn
+        maxReceiveCount: 3

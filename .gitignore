@@ -1,0 +1,7 @@
+.idea/
+config/client_secret.json
+config/token.json
+config/ultimate-walker-393914-61a2d52d0388.json
+.env.local
+logs/logs_erro_planilha.txt
+prompt.txt

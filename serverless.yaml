@@ -1,0 +1,164 @@
+service: auto-slk-import-lan
+
+frameworkVersion: '3'
+
+plugins:
+  - serverless-deployment-bucket
+  - serverless-prune-plugin
+  - serverless-python-requirements
+  - serverless-iam-roles-per-function
+
+package:
+  individually: true
+  exclude:
+    - ./**
+
+custom:
+  envParams: ${file(env/${self:provider.stage}.yaml)}
+  pythonRequirements:
+    dockerizePip: false
+    layer: false
+    zip: true
+    individually: true
+    pipCmdExtraArgs:
+      - "--platform manylinux2014_x86_64"
+      - "--only-binary=:all:"
+      - "--implementation cp"
+      - "--python-version 311"
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: #
+  stage: #
+  deploymentBucket:
+    name: #
+  stackTags:
+    ManagedBy: ServerlessFramework
+  logRetentionInDays: 30
+
+functions:
+  SlkRouter_import_lan:
+    name: ${self:service}-${self:provider.stage}-router
+    handler: main.lambda_handler
+    description: "Valida assinatura Slack e enfileira a solicitação no SQS."
+    module: src/SlkRouter_import_lan
+    package:
+      include:
+        - src/SlkRouter_import_lan/**
+    timeout: 29
+    memorySize: 256
+    environment:
+      QUEUE_URL: !Ref MainFifoQueue
+      SLACK_SIGNING_SECRET: ${self:custom.envParams.secretsManager.SLACK_SIGNING_SECRET}
+    events:
+      - http:
+          path: processar
+          method: post
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - sqs:SendMessage
+        Resource:
+          - Fn::GetAtt: [MainFifoQueue, Arn]
+      - Effect: "Allow"
+        Action:
+          - kms:GenerateDataKey
+          - kms:Decrypt
+        Resource:
+          - Fn::GetAtt: [SqsKmsKey, Arn]
+
+  SlkImporter_import_lan:
+    name: ${self:service}-${self:provider.stage}-importer
+    handler: main.lambda_handler
+    description: "Lê planilha, valida cada linha e enfileira no WorkerFifoQueue ou gera log de erro no Drive."
+    module: src/SlkImporter_import_lan
+    package:
+      include:
+        - src/SlkImporter_import_lan/**
+    timeout: 300
+    memorySize: 512
+    vpc: ${self:custom.envParams.vpcConfig}
+    environment:
+      DB_HOST: ${self:custom.envParams.secretsManager.DB_HOST}
+      DB_USER: ${self:custom.envParams.secretsManager.DB_USER}
+      DB_NAME: ${self:custom.envParams.secretsManager.DB_NAME}
+      DB_PASSWORD: ${self:custom.envParams.secretsManager.DB_PASSWORD}
+      GOOGLE_SECRET_ARN: ${self:custom.envParams.secretsManager.GOOGLE_SECRET_ARN}
+      WORKER_QUEUE_URL: !Ref WorkerFifoQueue
+      DRIVE_LOG_FOLDER_ID: ${self:custom.envParams.secretsManager.DRIVE_LOG_FOLDER_ID}
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [MainFifoQueue, Arn]
+          batchSize: 1
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+        Resource:
+          - Fn::GetAtt: [MainFifoQueue, Arn]
+      - Effect: "Allow"
+        Action:
+          - sqs:SendMessage
+        Resource:
+          - Fn::GetAtt: [WorkerFifoQueue, Arn]
+      - Effect: "Allow"
+        Action:
+          - kms:GenerateDataKey
+          - kms:Decrypt
+        Resource:
+          - Fn::GetAtt: [SqsKmsKey, Arn]
+      - Effect: "Allow"
+        Action:
+          - secretsmanager:GetSecretValue
+        Resource:
+          - ${self:custom.envParams.secretsManager.GOOGLE_SECRET_ARN}
+
+  SlkWorker_import_lan:
+    name: ${self:service}-${self:provider.stage}-worker
+    handler: main.lambda_handler
+    description: "Recebe linha já validada e insere lançamentos no banco, gerando log de sucesso no Drive."
+    module: src/SlkWorker_import_lan
+    package:
+      include:
+        - src/SlkWorker_import_lan/**
+    timeout: 300
+    memorySize: 1024
+    vpc: ${self:custom.envParams.vpcConfig}
+    environment:
+      DB_HOST: ${self:custom.envParams.secretsManager.DB_HOST}
+      DB_USER: ${self:custom.envParams.secretsManager.DB_USER}
+      DB_NAME: ${self:custom.envParams.secretsManager.DB_NAME}
+      DB_PASSWORD: ${self:custom.envParams.secretsManager.DB_PASSWORD}
+      GOOGLE_SECRET_ARN: ${self:custom.envParams.secretsManager.GOOGLE_SECRET_ARN}
+      DRIVE_LOG_FOLDER_ID: ${self:custom.envParams.secretsManager.DRIVE_LOG_FOLDER_ID}
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [WorkerFifoQueue, Arn]
+          batchSize: 10
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - sqs:ReceiveMessage
+          - sqs:DeleteMessage
+          - sqs:GetQueueAttributes
+        Resource:
+          - Fn::GetAtt: [WorkerFifoQueue, Arn]
+      - Effect: "Allow"
+        Action:
+          - kms:Decrypt
+        Resource:
+          - Fn::GetAtt: [SqsKmsKey, Arn]
+      - Effect: "Allow"
+        Action:
+          - secretsmanager:GetSecretValue
+        Resource:
+          - ${self:custom.envParams.secretsManager.GOOGLE_SECRET_ARN}
+
+resources:
+    - ${file(cloudformation/security-group.yaml)}
+    - ${file(cloudformation/sqs.yaml)}
